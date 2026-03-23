@@ -51,4 +51,4 @@ RUN python manage.py collectstatic --no-input
 EXPOSE 10000
 
 # Start command
-CMD ["gunicorn", "face_detection_system.wsgi:application", "--bind", "0.0.0.0:10000"]
+CMD python manage.py migrate && gunicorn face_detection_system.wsgi:application --bind 0.0.0.0:10000
