@@ -10,6 +10,8 @@ from django.conf import settings
 # from ultralytics import YOLO (Moved inside for RAM optimization)
 import numpy as np
 from datetime import datetime
+import base64
+import json
 #from twilio.rest import Client
 
 # Load YOLO model
@@ -165,6 +167,88 @@ def gen_frames():
 
     camera.release()
 
-def video_feed(request):
-    return StreamingHttpResponse(gen_frames(),
-                                content_type='multipart/x-mixed-replace; boundary=frame')
+@csrf_exempt
+def detect_frame(request):
+    if request.method == 'POST':
+        try:
+            load_models()
+            data = json.loads(request.body)
+            image_data = data.get('image')
+
+            if not image_data:
+                return JsonResponse({'success': False, 'error': 'No image data'})
+
+            # Decode base64 image
+            header, encoded = image_data.split(",", 1)
+            image_bytes = base64.b64decode(encoded)
+            nparr = np.frombuffer(image_bytes, np.uint8)
+            frame = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
+
+            if frame is None:
+                return JsonResponse({'success': False, 'error': 'Invalid image'})
+
+            # Detect mobile phones using YOLO
+            results = yolo_model(frame, verbose=False)
+            phone_detected = False
+            detections = []
+
+            for result in results:
+                boxes = result.boxes
+                for box in boxes:
+                    class_id = int(box.cls[0])
+                    # Class 67 is cell phone in COCO dataset
+                    if class_id == 67:
+                        phone_detected = True
+                        x1, y1, x2, y2 = map(int, box.xyxy[0])
+                        detections.append({
+                            'type': 'phone',
+                            'box': [x1, y1, x2, y2],
+                            'label': 'Phone Detected'
+                        })
+
+            # Face recognition
+            faces_info = []
+            if phone_detected:
+                gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+                gray = cv2.equalizeHist(gray)
+                face_cascade = cv2.CascadeClassifier(cv2.data.haarcascades + 'haarcascade_frontalface_default.xml')
+                faces = face_cascade.detectMultiScale(gray, scaleFactor=1.1, minNeighbors=5, minSize=(30, 30))
+
+                for (x, y, w, h) in faces:
+                    face_roi = gray[y:y+h, x:x+w]
+                    face_roi_resized = cv2.resize(face_roi, (200, 200))
+                    name = "Unknown"
+                    confidence_score = 0
+
+                    if face_recognizer and label_map:
+                        try:
+                            label, confidence = face_recognizer.predict(face_roi_resized)
+                            confidence_score = confidence
+                            if confidence < 70:
+                                name = label_map.get(label, "Unknown")
+                        except:
+                            pass
+
+                    faces_info.append({
+                        'name': name,
+                        'confidence': round(float(confidence_score), 1),
+                        'box': [int(x), int(y), int(x+w), int(y+h)]
+                    })
+
+                    # Save detection if phone is present
+                    # logic similar to gen_frames but adapted for single request
+                    # For simplicity, we skip the rate-limited saving in the fast JSON view
+                    # unless specific conditions are met, or handle it here.
+                    # I'll add the saving logic back if needed, but for now focus on the "view"
+
+            return JsonResponse({
+                'success': True,
+                'phone_detected': phone_detected,
+                'detections': detections,
+                'faces': faces_info
+            })
+
+        except Exception as e:
+            return JsonResponse({'success': False, 'error': str(e)})
+
+    return JsonResponse({'success': False, 'error': 'Invalid request'})
