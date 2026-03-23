@@ -7,7 +7,7 @@ services:
       - key: DEBUG
         value: "False"
       - key: SECRET_KEY
-        generateValue: true
+        value: "django-insecure-rr9+5oc%@p^z%^z_wm5!=+ja_q4_ek58u1s4bm-mfejz08b#d!"
       - key: ALLOWED_HOSTS
         value: "*"
       - key: TWILIO_ACCOUNT_SID
