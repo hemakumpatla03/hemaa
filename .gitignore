@@ -10,7 +10,7 @@ vairables/
 *.log
 
 # Models
-yolov8n.pt
+# yolov8n.pt (Included for deployment)
 
 # Others
 .vscode/

@@ -1,0 +1,17 @@
+.git
+__pycache__
+*.pyc
+*.pyo
+*.pyd
+db.sqlite3
+media/
+staticfiles/
+static/
+.vscode/
+.idea/
+*.spec
+dist/
+build/
+.env
+vairables/
+*.log
