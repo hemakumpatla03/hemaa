@@ -7,7 +7,7 @@ import cv2
 import pickle
 import os
 from django.conf import settings
-from ultralytics import YOLO
+# from ultralytics import YOLO (Moved inside for RAM optimization)
 import numpy as np
 from datetime import datetime
 #from twilio.rest import Client
@@ -39,6 +39,7 @@ def load_models():
     global yolo_model, face_recognizer, label_map
 
     if yolo_model is None:
+        from ultralytics import YOLO
         yolo_model = YOLO('yolov8n.pt')
 
     if face_recognizer is None:
