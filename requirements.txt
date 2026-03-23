@@ -1,11 +1,10 @@
 --extra-index-url https://download.pytorch.org/whl/cpu
 Django==5.0.1
 opencv-contrib-python==4.9.0.80
-torch==2.2.1+cpu
-torchvision==0.17.1+cpu
+torch==2.1.2+cpu
+torchvision==0.16.2+cpu
 ultralytics==8.1.24
 Pillow==10.2.0
 numpy==1.26.3
-twilio==9.0.0
 gunicorn==21.2.0
 whitenoise==6.6.0
