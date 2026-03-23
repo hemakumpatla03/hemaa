@@ -34,4 +34,4 @@ EXPOSE 10000
 
 # Start command
 # Runs migrations and starts gunicorn with minimal memory footprint
-CMD python manage.py migrate && gunicorn face_detection_system.wsgi:application --bind 0.0.0.0:10000 --timeout 120 --workers 1 --threads 2 --worker-tmp-dir /dev/shm
+CMD python manage.py migrate && gunicorn face_detection_system.wsgi:application --bind 0.0.0.0:10000 --timeout 120 --workers 1 --threads 1 --worker-tmp-dir /dev/shm
