@@ -34,10 +34,12 @@
             background: #000;
             border-radius: 10px;
             overflow: hidden;
+            box-shadow: 0 5px 15px rgba(0,0,0,0.5);
         }
         #video {
             width: 100%;
             display: block;
+            transform: scaleX(-1); /* Mirror view */
         }
         #overlay {
             position: absolute;
@@ -46,14 +48,11 @@
             width: 100%;
             height: 100%;
             pointer-events: none;
+            transform: scaleX(-1); /* Mirror view matching video */
         }
         .status-badge {
             font-size: 1.2rem;
             padding: 10px 20px;
-        }
-        .alert-custom {
-            border-radius: 10px;
-            padding: 15px;
         }
         .btn-custom {
             background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
@@ -62,6 +61,16 @@
             padding: 12px 30px;
             border-radius: 25px;
             font-weight: 600;
+            transition: all 0.3s;
+        }
+        .btn-custom:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(0,0,0,0.2);
+        }
+        #errorMessage {
+            display: none;
+            border-radius: 10px;
+            margin-top: 15px;
         }
     </style>
 </head>
@@ -75,30 +84,48 @@
                 <ul class="navbar-nav ms-auto">
                     <li class="nav-item"><a class="nav-link" href="{% url 'index' %}">Home</a></li>
                     <li class="nav-item"><a class="nav-link" href="{% url 'capture_page' %}">Capture</a></li>
-                    <li class="nav-item"><a class="nav-link" href="{% url 'training_page' %}">Training</a></li>
                     <li class="nav-item"><a class="nav-link active" href="{% url 'detection_page' %}">Detection</a></li>
                 </ul>
             </div>
         </div>
     </nav>
 
-    <div class="container mt-5">
+    <div class="container mt-4">
         <div class="row justify-content-center">
-            <div class="col-lg-10">
+            <div class="col-lg-10 text-center">
                 <div class="card">
                     <div class="card-header d-flex justify-content-between align-items-center">
-                        <h4 class="mb-0"><i class="fas fa-video"></i> Live Detection</h4>
-                        <button id="startBtn" class="btn btn-light btn-sm">Start Detection</button>
+                        <h4 class="mb-0"><i class="fas fa-video"></i> Live Face & Phone Detection</h4>
+                        <button id="startBtn" class="btn btn-light btn-sm fw-bold">START CAMERA</button>
                     </div>
                     <div class="card-body">
+                        <div id="status" class="mb-3">
+                            <span class="badge bg-secondary status-badge">OFFLINE</span>
+                        </div>
+                        
                         <div class="video-container">
-                            <video id="video" autoplay playsinline></video>
+                            <video id="video" autoplay playsinline muted></video>
                             <canvas id="overlay"></canvas>
                         </div>
                         <canvas id="hiddenCanvas" style="display:none;"></canvas>
 
-                        <div id="status" class="text-center mt-3">
-                            <span class="badge bg-secondary">Camera Offline</span>
+                        <div id="errorMessage" class="alert alert-danger"></div>
+
+                        <div class="mt-4 row">
+                            <div class="col-md-6">
+                                <div class="p-3 border rounded bg-light mb-2">
+                                    <i class="fas fa-mobile-alt text-danger fa-2x"></i>
+                                    <h6 class="mt-2">Phone Detection</h6>
+                                    <small>YOLOv8 Active</small>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="p-3 border rounded bg-light mb-2">
+                                    <i class="fas fa-user-circle text-success fa-2x"></i>
+                                    <h6 class="mt-2">Face Recognition</h6>
+                                    <small>LBPH Active</small>
+                                </div>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -112,25 +139,46 @@
         const hiddenCanvas = document.getElementById('hiddenCanvas');
         const startBtn = document.getElementById('startBtn');
         const status = document.getElementById('status').querySelector('span');
+        const errorMessage = document.getElementById('errorMessage');
         
         let active = false;
         let stream = null;
+        let processing = false;
 
         startBtn.onclick = async () => {
             if (!active) {
+                errorMessage.style.display = 'none';
+                status.textContent = 'STARTING...';
+                status.className = 'badge bg-warning status-badge';
+                
                 try {
                     stream = await navigator.mediaDevices.getUserMedia({ 
-                        video: { facingMode: 'user' } 
+                        video: { 
+                            facingMode: 'user',
+                            width: { ideal: 640 },
+                            height: { ideal: 480 }
+                        } 
                     });
                     video.srcObject = stream;
                     active = true;
-                    startBtn.textContent = 'Stop Detection';
-                    startBtn.className = 'btn btn-danger btn-sm';
-                    status.textContent = 'Live Monitoring';
-                    status.className = 'badge bg-success';
-                    detectLoop();
+                    
+                    video.onloadedmetadata = () => {
+                        overlay.width = video.videoWidth;
+                        overlay.height = video.videoHeight;
+                        hiddenCanvas.width = video.videoWidth;
+                        hiddenCanvas.height = video.videoHeight;
+                        
+                        startBtn.textContent = 'STOP CAMERA';
+                        startBtn.className = 'btn btn-danger btn-sm fw-bold';
+                        status.textContent = 'MONITORING LIVE';
+                        status.className = 'badge bg-success status-badge';
+                        detectLoop();
+                    };
                 } catch (err) {
-                    alert('Camera error: ' + err.message);
+                    status.textContent = 'ERROR';
+                    status.className = 'badge bg-danger status-badge';
+                    errorMessage.textContent = 'Camera Error: ' + err.message + '. Please ensure you are using HTTPS and have granted camera permissions.';
+                    errorMessage.style.display = 'block';
                 }
             } else {
                 stopDetection();
@@ -143,26 +191,26 @@
                 video.srcObject = null;
             }
             active = false;
-            startBtn.textContent = 'Start Detection';
-            startBtn.className = 'btn btn-light btn-sm';
-            status.textContent = 'Camera Offline';
-            status.className = 'badge bg-secondary';
+            startBtn.textContent = 'START CAMERA';
+            startBtn.className = 'btn btn-light btn-sm fw-bold';
+            status.textContent = 'OFFLINE';
+            status.className = 'badge bg-secondary status-badge';
             const ctx = overlay.getContext('2d');
             ctx.clearRect(0, 0, overlay.width, overlay.height);
         }
 
         async function detectLoop() {
-            if (!active) return;
+            if (!active || processing) return;
 
-            // Update overlay size to match video
-            overlay.width = video.videoWidth;
-            overlay.height = video.videoHeight;
-            hiddenCanvas.width = video.videoWidth;
-            hiddenCanvas.height = video.videoHeight;
+            if (video.videoWidth === 0) {
+                setTimeout(detectLoop, 100);
+                return;
+            }
 
+            processing = true;
             const ctx = hiddenCanvas.getContext('2d');
             ctx.drawImage(video, 0, 0);
-            const imageData = hiddenCanvas.toDataURL('image/jpeg', 0.5);
+            const imageData = hiddenCanvas.toDataURL('image/jpeg', 0.4); // Lower quality for faster upload
 
             try {
                 const response = await fetch('{% url "detect_frame" %}', {
@@ -175,17 +223,18 @@
                     drawDetections(data);
                 }
             } catch (err) {
-                console.error(err);
+                console.error('Detection error:', err);
             }
 
-            if (active) setTimeout(detectLoop, 150); // ~7 FPS
+            processing = false;
+            if (active) setTimeout(detectLoop, 100); 
         }
 
         function drawDetections(data) {
             const ctx = overlay.getContext('2d');
             ctx.clearRect(0, 0, overlay.width, overlay.height);
-            ctx.lineWidth = 3;
-            ctx.font = '18px Arial';
+            ctx.lineWidth = 4;
+            ctx.font = 'bold 20px Arial';
 
             // Draw Phones
             ctx.strokeStyle = '#ff0000';
@@ -193,7 +242,7 @@
             data.detections.forEach(det => {
                 const [x1, y1, x2, y2] = det.box;
                 ctx.strokeRect(x1, y1, x2-x1, y2-y1);
-                ctx.fillText(det.label, x1, y1 > 20 ? y1 - 5 : y1 + 20);
+                ctx.fillText(det.label.toUpperCase(), x1, y1 > 25 ? y1 - 8 : y1 + 25);
             });
 
             // Draw Faces
@@ -202,7 +251,7 @@
             data.faces.forEach(face => {
                 const [x, y, x2, y2] = face.box;
                 ctx.strokeRect(x, y, x2-x, y2-y);
-                ctx.fillText(`${face.name} (${face.confidence})`, x, y > 20 ? y - 5 : y + 20);
+                ctx.fillText(`${face.name.toUpperCase()} (${face.confidence})`, x, y > 25 ? y - 8 : y + 25);
             });
         }
     </script>

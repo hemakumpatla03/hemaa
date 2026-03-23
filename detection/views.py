@@ -14,10 +14,11 @@ import base64
 import json
 #from twilio.rest import Client
 
-# Load YOLO model
+# Global models and trackers
 yolo_model = None
 face_recognizer = None
 label_map = None
+last_save_time = {} # To rate-limit database saving
 
 '''def send_sms_alert(person_name):
     """Send SMS alert to admin when phone is detected"""
@@ -235,11 +236,33 @@ def detect_frame(request):
                         'box': [int(x), int(y), int(x+w), int(y+h)]
                     })
 
-                    # Save detection if phone is present
-                    # logic similar to gen_frames but adapted for single request
-                    # For simplicity, we skip the rate-limited saving in the fast JSON view
-                    # unless specific conditions are met, or handle it here.
-                    # I'll add the saving logic back if needed, but for now focus on the "view"
+                    # Auto-save detection to database
+                    current_time = datetime.now()
+                    save_key = f"{name}_phone"
+                    
+                    if save_key not in last_save_time or (current_time - last_save_time[save_key]).total_seconds() > 10:
+                        try:
+                            # Find person object
+                            person = Person.objects.filter(name=name).first()
+                            
+                            # Save detected frame to media
+                            if not os.path.exists(settings.MEDIA_ROOT):
+                                os.makedirs(settings.MEDIA_ROOT)
+                            
+                            filename = f"detection_{name}_{current_time.strftime('%Y%m%d_%H%M%S')}.jpg"
+                            filepath = os.path.join(settings.MEDIA_ROOT, filename)
+                            cv2.imwrite(filepath, frame)
+                            
+                            PhoneDetection.objects.create(
+                                person=person,
+                                detected_at=current_time,
+                                image=filename,
+                                notes=f"Detected phone use for {name} with confidence {confidence_score}"
+                            )
+                            last_save_time[save_key] = current_time
+                            print(f"Saved detection for {name}")
+                        except Exception as save_ext:
+                            print(f"Save error: {save_ext}")
 
             return JsonResponse({
                 'success': True,
